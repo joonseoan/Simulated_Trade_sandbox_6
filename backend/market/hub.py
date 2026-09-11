@@ -59,12 +59,19 @@ class PriceStreamHub:
     def _build_events(self) -> list[PriceEvent]:
         events: list[PriceEvent] = []
         for ticker, entry in self._cache.snapshot().items():
-            direction = direction_of(entry.previous_price, entry.price)
+            # Round before computing direction, not after: comparing the raw
+            # (unrounded) floats let a sub-precision move (e.g. 1e-6) come out
+            # "up"/"down" while `price` and `previous_price` — both rounded to
+            # 4dp for emission — displayed as identical values, producing a
+            # visible flash with no visible number change.
+            price = round(entry.price, 4)
+            previous_price = round(entry.previous_price, 4)
+            direction = direction_of(previous_price, price)
             events.append(
                 PriceEvent(
                     ticker=ticker,
-                    price=round(entry.price, 4),
-                    previous_price=round(entry.previous_price, 4),
+                    price=price,
+                    previous_price=previous_price,
                     timestamp=to_iso_z(entry.source_time),
                     direction=direction,
                 )

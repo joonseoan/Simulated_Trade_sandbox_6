@@ -61,6 +61,24 @@ async def test_build_events_re_emits_unchanged_price_as_flat_every_tick():
     assert events[0].direction == "flat"
 
 
+async def test_build_events_direction_matches_the_rounded_displayed_values():
+    # Regression test: direction used to be computed from the raw unrounded
+    # cache floats while price/previous_price were rounded to 4dp only for
+    # emission. A sub-precision move (e.g. 1e-6) then reported "up"/"down"
+    # even though the two rounded values displayed identically — a green/red
+    # flash with no visible price change. Direction must be computed from the
+    # same rounded values that are actually emitted.
+    cache = PriceCache()
+    cache.ingest(make_tick("AAPL", 100.00001))
+    hub = PriceStreamHub(cache)
+    hub._build_events()  # flat baseline
+
+    cache.ingest(make_tick("AAPL", 100.00002))  # +1e-5: > FLAT_EPSILON, rounds to same 4dp value
+    events = hub._build_events()
+    assert events[0].price == events[0].previous_price == 100.0
+    assert events[0].direction == "flat"
+
+
 async def test_build_events_empty_cache_returns_no_events():
     hub = PriceStreamHub(PriceCache())
     assert hub._build_events() == []

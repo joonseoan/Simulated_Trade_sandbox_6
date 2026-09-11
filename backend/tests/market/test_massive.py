@@ -184,6 +184,51 @@ async def test_get_prices_other_non_2xx_returns_empty_without_raising(httpx_mock
     assert prices == {}
 
 
+async def test_get_prices_invalid_json_body_returns_empty_without_raising(httpx_mock):
+    # Regression test: a 200 response with a body that isn't valid JSON must
+    # not let json.JSONDecodeError propagate out of get_prices() — same
+    # never-raise contract as the status-code branches above.
+    httpx_mock.add_response(status_code=200, content=b"not json")
+    provider = make_provider()
+    prices = await provider.get_prices(["AAPL"])
+    assert prices == {}
+
+
+async def test_get_prices_missing_tickers_list_returns_empty_without_raising(httpx_mock):
+    httpx_mock.add_response(json={"status": "OK"})  # no "tickers" key at all
+    provider = make_provider()
+    prices = await provider.get_prices(["AAPL"])
+    assert prices == {}
+
+
+async def test_get_prices_entry_missing_ticker_field_is_skipped_without_raising(httpx_mock):
+    # Regression test: a ticker object with a usable price field but no
+    # "ticker" key must be skipped, not raise KeyError.
+    httpx_mock.add_response(
+        json={
+            "status": "OK",
+            "tickers": [
+                {"lastTrade": {"p": 190.0}},  # no "ticker" key
+                {"ticker": "AAPL", "lastTrade": {"p": 191.0}},
+            ],
+        }
+    )
+    provider = make_provider()
+    prices = await provider.get_prices(["AAPL"])
+    assert set(prices) == {"AAPL"}
+
+
+async def test_get_prices_uppercases_response_ticker_symbol(httpx_mock):
+    # base.py's ABC contract promises "(uppercased)" keys; enforce it on the
+    # response side too, not just on the outgoing request params.
+    httpx_mock.add_response(
+        json={"status": "OK", "tickers": [{"ticker": "aapl", "lastTrade": {"p": 190.0}}]}
+    )
+    provider = make_provider()
+    prices = await provider.get_prices(["AAPL"])
+    assert set(prices) == {"AAPL"}
+
+
 async def test_get_prices_transport_error_returns_empty_without_raising(httpx_mock):
     httpx_mock.add_exception(httpx.ConnectError("boom"))
     provider = make_provider()
