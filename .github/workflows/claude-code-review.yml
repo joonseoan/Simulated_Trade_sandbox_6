@@ -43,3 +43,22 @@ jobs:
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 
+          # Optional: expanded allowed_tools snippet (commented out).
+          # Once uncommented, this grants Claude permission to run git push,
+          # create PRs via gh, and run uv/pytest/python3 commands directly,
+          # instead of just leaving review comments for manual review.
+          # NOTE: this file's action version uses the claude_args + --allowedTools
+          # flag style (camelCase, CLI flag), not a separate top-level
+          # `allowed_tools:` YAML key -- match the syntax already used above.
+          # claude_args: >
+          #   --allowedTools
+          #   "mcp__github_inline_comment__create_inline_comment"
+          #   "Bash(git push:*)"
+          #   "Bash(gh pr create:*)"
+          #   "Bash(uv sync:*)"
+          #   "Bash(uv run pytest:*)"
+          #   "Bash(python3:*)"
+          #
+          # Granting git push, gh pr create, and arbitrary python3 execution
+          # lets Claude push and open PRs without human review in between --
+          # be deliberate about when you flip this on.
