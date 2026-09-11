@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Environment
+.env
+
+# Runtime database (see planning/PLAN.md §4 — db/ is the bind-mount target)
+db/*.db
+db/*.db-*
+!db/.gitkeep
+
+# Node / Next.js (frontend, when present)
+node_modules/
+.next/
+frontend/out/
+
+# OS
+.DS_Store
