@@ -92,14 +92,33 @@ class MassiveProvider(MarketDataProvider):
             log.error("massive snapshot unexpected status: %s", resp.status_code)
             return {}
 
-        body = resp.json()
+        try:
+            body = resp.json()
+        except ValueError:
+            # Malformed JSON body on an otherwise-200 response. Same
+            # never-raise contract as the status-code branches above: log
+            # and return {} rather than let json.JSONDecodeError propagate
+            # out through MarketPoller.start()'s unguarded priming call.
+            log.exception("massive snapshot returned invalid JSON")
+            return {}
+
+        tickers_payload = body.get("tickers")
+        if not isinstance(tickers_payload, list):
+            log.error("massive snapshot payload missing/invalid 'tickers' list")
+            return {}
+
         now = datetime.now(timezone.utc)
         out: dict[str, PriceTick] = {}
-        for t in body.get("tickers", []):
+        for t in tickers_payload:
+            if not isinstance(t, dict):
+                continue  # malformed entry: skip rather than raise
             price = extract_price(t)
             if price is None:
                 continue  # no usable field this cycle — keep last cached
-            symbol = t["ticker"]
+            symbol = t.get("ticker")
+            if not symbol:
+                continue  # no symbol to key on: skip rather than KeyError
+            symbol = symbol.upper()  # keep the (uppercased) key contract from base.py
             updated_ns = t.get("updated")
             ts = ns_to_dt(updated_ns) if updated_ns else now
             out[symbol] = PriceTick(symbol, price, ts)
