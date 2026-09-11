@@ -25,7 +25,10 @@ def extract_price(ticker_obj: dict) -> float | None:
     Returns None if nothing usable is present (e.g. during the ~03:30-04:00
     EST daily snapshot reset window with no prevDay data either)."""
     for section, field in (("lastTrade", "p"), ("min", "c"), ("day", "c"), ("prevDay", "c")):
-        value = (ticker_obj.get(section) or {}).get(field)
+        section_obj = ticker_obj.get(section)
+        if not isinstance(section_obj, dict):
+            continue  # malformed/non-dict section (e.g. a string): skip rather than raise
+        value = section_obj.get(field)
         if value:  # skips both None and 0.0
             return float(value)
     return None
@@ -102,6 +105,13 @@ class MassiveProvider(MarketDataProvider):
             log.exception("massive snapshot returned invalid JSON")
             return {}
 
+        if not isinstance(body, dict):
+            # A syntactically-valid JSON body whose top-level value isn't an
+            # object (e.g. a bare list, string, number, or null) — `.get`
+            # below would raise AttributeError. Same never-raise contract.
+            log.error("massive snapshot payload was not a JSON object: %r", type(body).__name__)
+            return {}
+
         tickers_payload = body.get("tickers")
         if not isinstance(tickers_payload, list):
             log.error("massive snapshot payload missing/invalid 'tickers' list")
@@ -116,8 +126,8 @@ class MassiveProvider(MarketDataProvider):
             if price is None:
                 continue  # no usable field this cycle — keep last cached
             symbol = t.get("ticker")
-            if not symbol:
-                continue  # no symbol to key on: skip rather than KeyError
+            if not isinstance(symbol, str) or not symbol:
+                continue  # no usable symbol to key on: skip rather than raise
             symbol = symbol.upper()  # keep the (uppercased) key contract from base.py
             updated_ns = t.get("updated")
             ts = ns_to_dt(updated_ns) if updated_ns else now
@@ -138,8 +148,20 @@ class MassiveProvider(MarketDataProvider):
             log.warning("massive validate_ticker unexpected status %s for %s", resp.status_code, symbol)
             return False
 
-        body = resp.json()
-        return extract_price(body.get("ticker", {})) is not None
+        try:
+            body = resp.json()
+        except ValueError:
+            log.exception("massive validate_ticker returned invalid JSON for %s", symbol)
+            return False  # fail closed: reject on unparseable body
+
+        if not isinstance(body, dict):
+            log.error("massive validate_ticker payload was not a JSON object for %s", symbol)
+            return False
+
+        ticker_obj = body.get("ticker")
+        if not isinstance(ticker_obj, dict):
+            return False
+        return extract_price(ticker_obj) is not None
 
     # -- internals -------------------------------------------------------
     def _enter_backoff(self, loop: asyncio.AbstractEventLoop, retry_after: str | None) -> None:
