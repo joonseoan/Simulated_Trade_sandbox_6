@@ -48,3 +48,14 @@ jobs:
           # or https://code.claude.com/docs/en/cli-reference for available options
           # claude_args: '--allowed-tools Bash(gh pr *)'
 
+          # Optional: allowed_tools snippet (commented out).
+          # Once uncommented, this grants Claude permission to run git push,
+          # create PRs via gh, and run uv/pytest/python3 commands directly,
+          # instead of just proposing changes for manual review.
+          # allowed_tools: |
+          #   Bash(git push:*)
+          #   Bash(gh pr create:*)
+          #   Bash(uv sync:*)
+          #   Bash(uv run pytest:*)
+          #   Bash(python3:*)
+
